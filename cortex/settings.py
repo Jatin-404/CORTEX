@@ -40,7 +40,7 @@ class Settings(BaseSettings):
     qdrant_upsert_batch: int = 64
 
     # ── Postgres ─────────────────────────────────────────────────────────────
-    postgres_dsn: str = "postgresql+psycopg://cortex:cortex@localhost:5432/cortex"
+    postgres_dsn: str = "postgresql+psycopg://cortex:cortex@localhost:5433/cortex"
 
     # ── Redis / Celery ───────────────────────────────────────────────────────
     celery_broker: str = "redis://localhost:6379/0"
@@ -73,6 +73,12 @@ class Settings(BaseSettings):
 
     # ── LangGraph (Stage 2d) ─────────────────────────────────────────────────
     langgraph_checkpoint_backend: str = "postgres"  # postgres | memory | none
+
+    # ── Langfuse observability (Stage 2e) ────────────────────────────────────
+    langfuse_enabled: bool = False
+    langfuse_host: str = "http://localhost:3000"
+    langfuse_public_key: str = ""
+    langfuse_secret_key: str = ""
 
     # ── Ingestion behaviour ───────────────────────────────────────────────────
     skip_unchanged: bool = True

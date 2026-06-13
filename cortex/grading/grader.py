@@ -86,6 +86,7 @@ class ContextGrader:
             messages,
             model=self.settings.grader_model or None,
             temperature=0.2,
+            trace_name="grader-rewrite",
         )
         cleaned = rewritten.strip().strip('"').strip("'")
         log.info("query_rewritten", extra={"from": current_query, "to": cleaned})
@@ -102,6 +103,7 @@ class ContextGrader:
             messages,
             model=self.settings.grader_model or None,
             temperature=0.0,
+            trace_name="grader-llm",
         )
 
         try:

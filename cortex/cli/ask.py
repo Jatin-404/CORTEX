@@ -9,6 +9,7 @@ import sys
 
 from cortex.logging_config import configure_logging
 from cortex.models.enums import SourceType
+from cortex.observability.langfuse import trace_url
 from cortex.settings import settings
 from cortex.synthesis.result import SynthesisResult
 from cortex.synthesis.synthesizer import KBSynthesizer
@@ -109,6 +110,9 @@ def run_ask(
                         }
                         for s in result.sources
                     ],
+                    "thread_id": result.thread_id,
+                    "trace_id": result.trace_id,
+                    "trace_url": trace_url(settings, result.trace_id) if result.trace_id else "",
                 },
                 indent=2,
             )
@@ -124,6 +128,9 @@ def run_ask(
         print()
     if show_sources and result.sources:
         print(_format_sources(result))
+    if result.trace_id:
+        print()
+        print(f"Trace: {trace_url(settings, result.trace_id)}")
 
     return result
 

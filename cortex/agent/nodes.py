@@ -18,6 +18,7 @@ from cortex.agent.state import KBAgentState
 from cortex.grading.grader import GradeAttempt
 from cortex.models.enums import SourceType
 from cortex.retrieval.dedupe import dedupe_by_path
+from cortex.observability.langfuse import record_grade, record_retrieval, record_rewrite
 from cortex.retrieval.format import format_retrieval_results
 from cortex.synthesis.prompts import build_messages
 
@@ -43,6 +44,7 @@ def retrieve_rerank_node(state: KBAgentState, config: RunnableConfig) -> dict:
     chunks = dedupe_by_path(raw)
 
     log.info("node_retrieve_rerank", extra={"query": current_query, "chunks": len(chunks)})
+    record_retrieval(current_query, chunks)
     return {
         "current_query": current_query,
         "chunks": [chunk_to_dict(c) for c in chunks],
@@ -63,6 +65,13 @@ def grade_node(state: KBAgentState, config: RunnableConfig) -> dict:
         "node_grade",
         extra={"passed": grade.passed, "method": grade.method, "reason": grade.reason},
     )
+    record_grade(
+        query=current_query,
+        passed=grade.passed,
+        method=grade.method,
+        reason=grade.reason,
+        chunk_count=len(chunks),
+    )
     return {
         "grade_passed": grade.passed,
         "grade_attempts": [attempt],
@@ -80,6 +89,11 @@ def rewrite_node(state: KBAgentState, config: RunnableConfig) -> dict:
     new_query = deps.grader.rewrite_query(state["query"], current_query, last.grade)
 
     log.info("node_rewrite", extra={"from": current_query, "to": new_query})
+    record_rewrite(
+        from_query=current_query,
+        to_query=new_query,
+        retry_count=state.get("retry_count", 0) + 1,
+    )
     return {
         "current_query": new_query,
         "retry_count": state.get("retry_count", 0) + 1,
@@ -106,7 +120,7 @@ def synthesize_node(state: KBAgentState, config: RunnableConfig) -> dict:
         max_content_chars=deps.settings.synthesis_context_chars,
     )
     messages = build_messages(context, query)
-    answer = deps.llm.chat(messages)
+    answer = deps.llm.chat(messages, trace_name="kb-synthesize")
 
     log.info("node_synthesize", extra={"answer_len": len(answer), "chunks": len(chunks)})
     return {

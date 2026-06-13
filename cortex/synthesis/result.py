@@ -28,3 +28,4 @@ class SynthesisResult:
     grade_passed: bool = True
     grade_attempts: list[GradeAttempt] = field(default_factory=list)
     thread_id: str = ""
+    trace_id: str = ""

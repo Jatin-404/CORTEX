@@ -6,12 +6,23 @@ import logging
 import uuid
 from typing import Any
 
+from langfuse import observe, propagate_attributes
+
 from cortex.agent.checkpointer import get_checkpointer
 from cortex.agent.deps import AgentDeps
 from cortex.agent.graph import build_kb_graph
 from cortex.agent.serialization import dict_to_chunk, dict_to_grade_attempt
 from cortex.grading.grader import GradeAttempt
 from cortex.models.enums import SourceType
+from cortex.observability.langfuse import (
+    configure,
+    create_callback_handler,
+    current_trace_id,
+    flush,
+    is_enabled,
+    trace_url,
+    update_current_span,
+)
 from cortex.settings import Settings
 from cortex.synthesis.result import SourceCitation, SynthesisResult
 
@@ -24,8 +35,93 @@ class KBGraphAgent:
     def __init__(self, settings: Settings | None = None) -> None:
         self.settings = settings or Settings()
         self.deps = AgentDeps.from_settings(self.settings)
+        if is_enabled(self.settings):
+            configure(self.settings)
 
     def ask(
+        self,
+        query: str,
+        *,
+        source_type: SourceType = SourceType.HANDBOOK_MARKDOWN,
+        limit: int | None = None,
+        department: str | None = None,
+        use_rerank: bool | None = None,
+        use_grader: bool | None = None,
+        thread_id: str | None = None,
+    ) -> SynthesisResult:
+        if is_enabled(self.settings):
+            return self._ask_traced(
+                query,
+                source_type=source_type,
+                limit=limit,
+                department=department,
+                use_rerank=use_rerank,
+                use_grader=use_grader,
+                thread_id=thread_id,
+            )
+        return self._ask_impl(
+            query,
+            source_type=source_type,
+            limit=limit,
+            department=department,
+            use_rerank=use_rerank,
+            use_grader=use_grader,
+            thread_id=thread_id,
+        )
+
+    @observe(name="cortex-kb-ask", capture_input=False, capture_output=False)
+    def _ask_traced(
+        self,
+        query: str,
+        *,
+        source_type: SourceType,
+        limit: int | None,
+        department: str | None,
+        use_rerank: bool | None,
+        use_grader: bool | None,
+        thread_id: str | None,
+    ) -> SynthesisResult:
+        thread_id = thread_id or str(uuid.uuid4())
+        update_current_span(
+            input={"query": query},
+            metadata={
+                "source_type": source_type.value,
+                "department": department,
+                "limit": limit,
+                "use_rerank": use_rerank,
+                "use_grader": use_grader,
+            },
+        )
+
+        with propagate_attributes(
+            session_id=thread_id,
+            tags=["cortex", "kb-ask"],
+            metadata={"feature": "handbook-rag"},
+        ):
+            result = self._ask_impl(
+                query,
+                source_type=source_type,
+                limit=limit,
+                department=department,
+                use_rerank=use_rerank,
+                use_grader=use_grader,
+                thread_id=thread_id,
+            )
+
+        trace_id = current_trace_id()
+        result.trace_id = trace_id
+        update_current_span(
+            output={
+                "answer_preview": result.answer[:500],
+                "grade_passed": result.grade_passed,
+                "source_count": len(result.sources),
+            },
+            metadata={"trace_url": trace_url(self.settings, trace_id)},
+        )
+        flush(self.settings)
+        return result
+
+    def _ask_impl(
         self,
         query: str,
         *,
@@ -53,12 +149,16 @@ class KBGraphAgent:
             "thread_id": thread_id,
         }
 
-        config = {
+        config: dict[str, Any] = {
             "configurable": {
                 "deps": self.deps,
                 "thread_id": thread_id,
             }
         }
+
+        handler = create_callback_handler()
+        if handler is not None:
+            config["callbacks"] = [handler]
 
         with get_checkpointer(self.settings) as checkpointer:
             graph = build_kb_graph(deps=self.deps, checkpointer=checkpointer)
@@ -72,12 +172,16 @@ class KBGraphAgent:
 
     def resume(self, thread_id: str, update: dict[str, Any] | None = None) -> SynthesisResult:
         """Resume a checkpointed thread (multi-turn: pass a new query in update)."""
-        config = {
+        config: dict[str, Any] = {
             "configurable": {
                 "deps": self.deps,
                 "thread_id": thread_id,
             }
         }
+
+        handler = create_callback_handler()
+        if handler is not None:
+            config["callbacks"] = [handler]
 
         with get_checkpointer(self.settings) as checkpointer:
             if checkpointer is None:
@@ -85,7 +189,10 @@ class KBGraphAgent:
             graph = build_kb_graph(deps=self.deps, checkpointer=checkpointer)
             final_state = graph.invoke(update or {}, config)
             query = final_state.get("query", "")
-            return _state_to_result(query, final_state)
+            result = _state_to_result(query, final_state)
+            if is_enabled(self.settings):
+                flush(self.settings)
+            return result
 
 
 def _state_to_result(query: str, state: dict[str, Any]) -> SynthesisResult:

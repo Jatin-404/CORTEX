@@ -10,4 +10,18 @@ wheels/
 .venv
 data/
 
+# Local secrets
 .env
+keys
+langfuse.compose.env
+
+# Cursor agent skills (installed docs, not app runtime)
+.agents/
+skills-lock.json
+
+# Test / tooling caches
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+htmlcov/
