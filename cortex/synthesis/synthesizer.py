@@ -1,10 +1,11 @@
-"""KB answer synthesis — retrieve, rerank, format context, generate cited answer."""
+"""KB answer synthesis — retrieve, rerank, grade, synthesize (Corrective-RAG)."""
 
 from __future__ import annotations
 
 import logging
 from dataclasses import dataclass, field
 
+from cortex.grading.grader import ContextGrader, GradeAttempt, GradeResult
 from cortex.llm.ollama import OllamaChatClient
 from cortex.models.enums import SourceType
 from cortex.retrieval.format import format_retrieval_results
@@ -14,6 +15,10 @@ from cortex.settings import Settings
 from cortex.synthesis.prompts import build_messages
 
 log = logging.getLogger(__name__)
+
+_INSUFFICIENT_MSG = (
+    "I don't have enough information in the handbook to answer that question."
+)
 
 
 @dataclass
@@ -32,18 +37,23 @@ class SynthesisResult:
     answer: str
     sources: list[SourceCitation] = field(default_factory=list)
     chunks: list[RetrievedChunk] = field(default_factory=list)
+    final_query: str = ""
+    grade_passed: bool = True
+    grade_attempts: list[GradeAttempt] = field(default_factory=list)
 
 
 class KBSynthesizer:
     """
-    End-to-end KB Q&A: RetrievalPipeline -> context formatting -> Ollama chat.
+    End-to-end KB Q&A with Corrective-RAG grading.
 
-    LangGraph topology (later): rerank -> grade -> synthesize
+    LangGraph topology (later): retrieve -> rerank -> grade -> synthesize
+    Retry loop: on grade failure, rewrite query and re-retrieve (capped).
     """
 
     def __init__(self, settings: Settings | None = None) -> None:
         self.settings = settings or Settings()
         self.pipeline = RetrievalPipeline(self.settings)
+        self.grader = ContextGrader(self.settings)
         self.llm = OllamaChatClient(self.settings)
 
     def ask(
@@ -54,21 +64,69 @@ class KBSynthesizer:
         limit: int | None = None,
         department: str | None = None,
         use_rerank: bool | None = None,
+        use_grader: bool | None = None,
     ) -> SynthesisResult:
-        chunks = self._retrieve(
-            query,
-            source_type=source_type,
-            limit=limit,
-            department=department,
-            use_rerank=use_rerank,
-        )
+        use_grader = self.settings.grader_enabled if use_grader is None else use_grader
+        max_attempts = self.settings.grader_max_retries + 1
+
+        current_query = query
+        grade_attempts: list[GradeAttempt] = []
+        chunks: list[RetrievedChunk] = []
+        last_grade: GradeResult | None = None
+
+        for attempt in range(max_attempts):
+            chunks = self._retrieve(
+                current_query,
+                source_type=source_type,
+                limit=limit,
+                department=department,
+                use_rerank=use_rerank,
+            )
+
+            if not use_grader:
+                break
+
+            grade = self.grader.grade(current_query, chunks)
+            last_grade = grade
+            grade_attempts.append(
+                GradeAttempt(query=current_query, grade=grade, chunk_count=len(chunks))
+            )
+
+            log.info(
+                "grade_result",
+                extra={
+                    "attempt": attempt + 1,
+                    "passed": grade.passed,
+                    "method": grade.method,
+                    "reason": grade.reason,
+                },
+            )
+
+            if grade.passed:
+                break
+
+            if attempt < max_attempts - 1:
+                current_query = self.grader.rewrite_query(query, current_query, grade)
+            else:
+                return SynthesisResult(
+                    query=query,
+                    answer=_INSUFFICIENT_MSG,
+                    sources=[],
+                    chunks=chunks,
+                    final_query=current_query,
+                    grade_passed=False,
+                    grade_attempts=grade_attempts,
+                )
 
         if not chunks:
             return SynthesisResult(
                 query=query,
-                answer="I don't have enough information in the handbook to answer that question.",
+                answer=_INSUFFICIENT_MSG,
                 sources=[],
                 chunks=[],
+                final_query=current_query,
+                grade_passed=False,
+                grade_attempts=grade_attempts,
             )
 
         context = format_retrieval_results(
@@ -101,6 +159,9 @@ class KBSynthesizer:
             answer=answer,
             sources=sources,
             chunks=chunks,
+            final_query=current_query,
+            grade_passed=last_grade.passed if last_grade else True,
+            grade_attempts=grade_attempts,
         )
 
     def _retrieve(
@@ -131,7 +192,9 @@ def _dedupe_by_path(chunks: list[RetrievedChunk]) -> list[RetrievedChunk]:
         if existing is None:
             seen[key] = chunk
             continue
-        existing_score = existing.rerank_score if existing.rerank_score is not None else existing.score
+        existing_score = (
+            existing.rerank_score if existing.rerank_score is not None else existing.score
+        )
         chunk_score = chunk.rerank_score if chunk.rerank_score is not None else chunk.score
         if chunk_score > existing_score:
             seen[key] = chunk

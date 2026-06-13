@@ -43,3 +43,4 @@ def test_ask_contributing_question() -> None:
     paths = [s.relative_path for s in result.sources]
     assert any("contributing" in p for p in paths)
     assert "[" in result.answer  # inline citation expected
+    assert result.grade_passed

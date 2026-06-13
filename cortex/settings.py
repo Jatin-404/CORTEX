@@ -63,6 +63,14 @@ class Settings(BaseSettings):
     llm_timeout_seconds: float = 180.0
     synthesis_context_chars: int = 1200  # max chars per chunk in LLM context
 
+    # ── Grader / Corrective-RAG (Stage 2c) ──────────────────────────────────
+    grader_enabled: bool = True
+    grader_max_retries: int = 2
+    grader_model: str = ""  # empty = use llm_model
+    grader_fast_pass_score: float = 0.75  # skip LLM grade when top rerank >= this
+    grader_min_rerank_score: float = 0.30  # fast-fail when top rerank below this
+    grader_context_chars: int = 800  # excerpt length sent to grader LLM
+
     # ── Ingestion behaviour ───────────────────────────────────────────────────
     skip_unchanged: bool = True
     delete_stale_chunks: bool = True  # remove old chunks when doc changes

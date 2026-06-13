@@ -95,7 +95,9 @@ hits = pipeline.search(
 context = format_retrieval_results(hits)  # ready for LLM prompt (Stage 2b)
 ```
 
-Future LangGraph topology: `retrieve → rerank → grade → synthesize` (grader plugs in after rerank).
+Future LangGraph topology: `retrieve -> rerank -> grade -> synthesize` (retry on grade failure).
+
+Grader uses fast-pass on high rerank scores (no extra LLM call). Use `--show-grade` to see attempts.
 
 ## Ask questions (retrieve + rerank + synthesize)
 
