@@ -80,6 +80,19 @@ class Settings(BaseSettings):
     langfuse_public_key: str = ""
     langfuse_secret_key: str = ""
 
+    # ── API / warmup (Stage 2f) ───────────────────────────────────────────────
+    warmup_enabled: bool = True
+    warmup_skip_llm_ping: bool = False
+    api_host: str = "0.0.0.0"
+    api_port: int = 8000
+
+    # ── Evaluation (Stage 2f) ─────────────────────────────────────────────────
+    eval_golden_path: Path = Path("eval/golden_handbook.json")
+    eval_reports_dir: Path = Path("eval/reports")
+    eval_ragas_enabled: bool = True
+    eval_llm_model: str = "llama3:latest"
+    eval_llm_timeout_seconds: float = 300.0
+
     # ── Ingestion behaviour ───────────────────────────────────────────────────
     skip_unchanged: bool = True
     delete_stale_chunks: bool = True  # remove old chunks when doc changes

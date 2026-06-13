@@ -25,3 +25,6 @@ skills-lock.json
 .mypy_cache/
 .coverage
 htmlcov/
+
+# Eval run outputs
+eval/reports/

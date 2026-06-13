@@ -1,0 +1,20 @@
+[
+  {
+    "id": "contributing",
+    "question": "How do I contribute to the GitLab handbook?",
+    "ground_truth": "Contributors fork the GitLab handbook project, create a branch, edit Markdown files, and open a merge request for review before changes are merged.",
+    "expected_paths": ["about/contributing.md"]
+  },
+  {
+    "id": "handbook-purpose",
+    "question": "What is the GitLab handbook?",
+    "ground_truth": "The GitLab handbook is the central repository for company policies, processes, and how GitLab works.",
+    "expected_paths": ["about/_index.md", "about/the-handbook.md"]
+  },
+  {
+    "id": "merge-requests",
+    "question": "How do I create a merge request?",
+    "ground_truth": "Create a branch, push changes, then open a merge request in GitLab with a clear title and description for reviewers.",
+    "expected_paths": ["about/contributing.md", "development"]
+  }
+]

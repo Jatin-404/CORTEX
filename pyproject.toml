@@ -21,17 +21,28 @@ dependencies = [
     "langgraph-checkpoint-postgres>=2.0",
     "langfuse>=4.7.1",
     "langchain>=1.3.9",
+    "fastapi>=0.115",
+    "uvicorn[standard]>=0.32",
 ]
 
 [project.scripts]
 cortex-ingest = "cortex.cli.ingest:main"
 cortex-query = "cortex.cli.query:main"
 cortex-ask = "cortex.cli.ask:main"
+cortex-api = "cortex.api.app:main"
+cortex-eval = "cortex.cli.eval:main"
 
 [project.optional-dependencies]
 dev = [
     "pytest>=8.0",
     "ruff>=0.5",
+]
+eval = [
+    "ragas>=0.2",
+    "datasets>=3.0",
+    "langchain-ollama>=0.2",
+    "langchain-community>=0.3,<0.4",
+    "pandas>=2.0",
 ]
 
 [build-system]
