@@ -71,6 +71,9 @@ class Settings(BaseSettings):
     grader_min_rerank_score: float = 0.30  # fast-fail when top rerank below this
     grader_context_chars: int = 800  # excerpt length sent to grader LLM
 
+    # ── LangGraph (Stage 2d) ─────────────────────────────────────────────────
+    langgraph_checkpoint_backend: str = "postgres"  # postgres | memory | none
+
     # ── Ingestion behaviour ───────────────────────────────────────────────────
     skip_unchanged: bool = True
     delete_stale_chunks: bool = True  # remove old chunks when doc changes

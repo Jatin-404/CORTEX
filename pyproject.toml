@@ -17,6 +17,8 @@ dependencies = [
     "tiktoken>=0.7",
     "fastembed>=0.4",
     "sentence-transformers>=3.0",
+    "langgraph>=0.2",
+    "langgraph-checkpoint-postgres>=2.0",
 ]
 
 [project.scripts]

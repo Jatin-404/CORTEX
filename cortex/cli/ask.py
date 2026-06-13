@@ -10,7 +10,8 @@ import sys
 from cortex.logging_config import configure_logging
 from cortex.models.enums import SourceType
 from cortex.settings import settings
-from cortex.synthesis.synthesizer import KBSynthesizer, SynthesisResult
+from cortex.synthesis.result import SynthesisResult
+from cortex.synthesis.synthesizer import KBSynthesizer
 
 
 def _safe_text(text: str) -> str:
@@ -63,6 +64,7 @@ def run_ask(
     show_sources: bool = True,
     show_grade: bool = False,
     as_json: bool = False,
+    thread_id: str | None = None,
 ) -> SynthesisResult:
     synthesizer = KBSynthesizer(settings)
     result = synthesizer.ask(
@@ -72,6 +74,7 @@ def run_ask(
         department=department,
         use_rerank=use_rerank,
         use_grader=use_grader,
+        thread_id=thread_id,
     )
 
     if as_json:
@@ -140,6 +143,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--show-grade", action="store_true", help="Print grading attempts")
     parser.add_argument("--no-sources", action="store_true", help="Hide source list after answer")
     parser.add_argument("--json", action="store_true", help="Output JSON")
+    parser.add_argument("--thread-id", help="LangGraph checkpoint thread id (for resume)")
     parser.add_argument("-q", "--quiet", action="store_true", help="Suppress httpx logs")
 
     args = parser.parse_args(argv)
@@ -156,6 +160,7 @@ def main(argv: list[str] | None = None) -> int:
             show_sources=not args.no_sources,
             show_grade=args.show_grade,
             as_json=args.json,
+            thread_id=args.thread_id,
         )
     except Exception as exc:
         logging.getLogger(__name__).error("ask_failed: %s", exc)

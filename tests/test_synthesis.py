@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from cortex.retrieval.kb_retriever import RetrievedChunk
 from cortex.synthesis.prompts import SYSTEM_PROMPT, build_messages
-from cortex.synthesis.synthesizer import _dedupe_by_path
+from cortex.retrieval.dedupe import dedupe_by_path
 
 
 def _chunk(path: str, score: float, rerank: float | None = None) -> RetrievedChunk:
@@ -38,7 +38,7 @@ def test_dedupe_keeps_best_scoring_chunk_per_path() -> None:
         _chunk("about/a.md", 1.0, 0.6),
         _chunk("about/b.md", 0.3, 0.9),
     ]
-    deduped = _dedupe_by_path(chunks)
+    deduped = dedupe_by_path(chunks)
     assert len(deduped) == 2
     assert deduped[0].relative_path == "about/a.md"
     assert deduped[0].rerank_score == 0.8
