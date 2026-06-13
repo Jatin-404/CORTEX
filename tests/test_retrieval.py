@@ -1,4 +1,4 @@
-"""Integration tests for KBRetriever — require Qdrant + Ollama."""
+"""Integration tests for KBRetriever and rerank pipeline — require Qdrant + Ollama."""
 
 from __future__ import annotations
 
@@ -7,6 +7,7 @@ import pytest
 
 from cortex.models.enums import SourceType
 from cortex.retrieval.kb_retriever import KBRetriever
+from cortex.retrieval.pipeline import RetrievalPipeline
 from cortex.settings import Settings
 
 
@@ -30,6 +31,11 @@ pytestmark = pytest.mark.skipif(
 @pytest.fixture
 def retriever() -> KBRetriever:
     return KBRetriever(Settings())
+
+
+@pytest.fixture
+def pipeline() -> RetrievalPipeline:
+    return RetrievalPipeline(Settings())
 
 
 def test_search_returns_handbook_results(retriever: KBRetriever) -> None:
@@ -66,3 +72,20 @@ def test_department_filter(retriever: KBRetriever) -> None:
     )
     assert len(results) >= 1
     assert all(r.metadata.get("department") == "about" for r in results)
+
+
+def test_rerank_promotes_contributing_page(pipeline: RetrievalPipeline) -> None:
+    query = "How do I contribute to the GitLab handbook?"
+    hybrid = pipeline.search(query, limit=5, use_rerank=False)
+    reranked = pipeline.search(query, limit=5, use_rerank=True)
+
+    assert len(hybrid) >= 1
+    assert len(reranked) >= 1
+    assert all(hit.rerank_score is not None for hit in reranked)
+
+    rerank_paths = [h.relative_path for h in reranked]
+    assert any("contributing" in p for p in rerank_paths)
+
+    # Reranker should surface the dedicated contributing page in top 2
+    assert "about/contributing.md" in rerank_paths[:2]
+

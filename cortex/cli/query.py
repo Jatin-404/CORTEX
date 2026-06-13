@@ -1,4 +1,4 @@
-"""CLI for hybrid KB retrieval smoke tests."""
+"""CLI for hybrid KB retrieval with optional BGE reranking."""
 
 from __future__ import annotations
 
@@ -10,7 +10,8 @@ import textwrap
 
 from cortex.logging_config import configure_logging
 from cortex.models.enums import SourceType
-from cortex.retrieval.kb_retriever import KBRetriever, RetrievedChunk
+from cortex.retrieval.kb_retriever import RetrievedChunk
+from cortex.retrieval.pipeline import RetrievalPipeline
 from cortex.settings import settings
 
 
@@ -21,9 +22,15 @@ def _truncate(text: str, max_chars: int) -> str:
     return text[: max_chars - 3] + "..."
 
 
+def _score_label(hit: RetrievedChunk) -> str:
+    if hit.rerank_score is not None:
+        return f"rerank={hit.rerank_score:.4f} retrieval={hit.score:.4f}"
+    return f"score={hit.score:.4f}"
+
+
 def _format_text_result(rank: int, hit: RetrievedChunk, *, show_parent: bool, preview: int) -> str:
     lines = [
-        f"[{rank}] score={hit.score:.4f}",
+        f"[{rank}] {_score_label(hit)}",
         f"    source: {hit.relative_path}",
         f"    title:  {hit.title}",
     ]
@@ -46,20 +53,25 @@ def run_query(
     show_parent: bool = False,
     preview: int = 300,
     as_json: bool = False,
+    use_rerank: bool | None = None,
 ) -> list[RetrievedChunk]:
-    retriever = KBRetriever(settings)
-    results = retriever.search(
+    pipeline = RetrievalPipeline(settings)
+    results = pipeline.search(
         query,
         source_type=source_type,
         limit=limit,
         department=department,
+        use_rerank=use_rerank,
     )
+
+    rerank_on = settings.rerank_enabled if use_rerank is None else use_rerank
 
     if as_json:
         payload = [
             {
                 "rank": i,
-                "score": hit.score,
+                "retrieval_score": hit.score,
+                "rerank_score": hit.rerank_score,
                 "chunk_id": hit.chunk_id,
                 "doc_id": hit.doc_id,
                 "title": hit.title,
@@ -75,7 +87,12 @@ def run_query(
         return results
 
     print(f'Query: "{query}"')
-    print(f"Results: {len(results)} (source_type={source_type.value}, limit={limit})")
+    print(
+        f"Results: {len(results)} "
+        f"(source_type={source_type.value}, limit={limit}, rerank={rerank_on})"
+    )
+    if rerank_on:
+        print(f"Pipeline: hybrid top-{settings.retrieve_candidates} -> rerank -> top-{limit}")
     if department:
         print(f"Department filter: {department}")
     print()
@@ -94,7 +111,7 @@ def run_query(
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Query the Cortex knowledge base")
     parser.add_argument("query", help="Natural language search query")
-    parser.add_argument("-n", "--limit", type=int, default=5, help="Max results (default: 5)")
+    parser.add_argument("-n", "--limit", type=int, default=5, help="Final result count (default: 5)")
     parser.add_argument(
         "--department",
         help="Filter by handbook department folder (e.g. engineering, values)",
@@ -104,6 +121,11 @@ def main(argv: list[str] | None = None) -> int:
         default=SourceType.HANDBOOK_MARKDOWN.value,
         choices=[st.value for st in SourceType],
         help="Qdrant payload source_type filter",
+    )
+    parser.add_argument(
+        "--no-rerank",
+        action="store_true",
+        help="Skip cross-encoder rerank; return raw hybrid search results",
     )
     parser.add_argument(
         "--show-parent",
@@ -131,6 +153,7 @@ def main(argv: list[str] | None = None) -> int:
             show_parent=args.show_parent,
             preview=args.preview,
             as_json=args.json,
+            use_rerank=False if args.no_rerank else None,
         )
     except Exception as exc:
         logging.getLogger(__name__).error("query_failed: %s", exc)

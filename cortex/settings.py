@@ -50,6 +50,19 @@ class Settings(BaseSettings):
     # ── Logging ──────────────────────────────────────────────────────────────
     log_level: str = "INFO"
 
+    # ── Retrieval / reranking ─────────────────────────────────────────────────
+    rerank_enabled: bool = True
+    retrieve_candidates: int = 20  # wide pool from hybrid search before rerank
+    rerank_top_k: int = 5          # final results after cross-encoder
+    rerank_model: str = "BAAI/bge-reranker-v2-m3"
+    rerank_max_chars: int = 1500   # max text length per cross-encoder pair
+
+    # ── LLM synthesis (Stage 2b) ────────────────────────────────────────────
+    llm_model: str = "llama3.2:latest"
+    llm_temperature: float = 0.1
+    llm_timeout_seconds: float = 180.0
+    synthesis_context_chars: int = 1200  # max chars per chunk in LLM context
+
     # ── Ingestion behaviour ───────────────────────────────────────────────────
     skip_unchanged: bool = True
     delete_stale_chunks: bool = True  # remove old chunks when doc changes

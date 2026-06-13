@@ -60,11 +60,14 @@ cortex-ingest file data/handbook-main/handbook-main/content/handbook/about/contr
 
 ## Query the knowledge base
 
-After ingestion, run hybrid search against Qdrant:
+After ingestion, run two-stage retrieval (hybrid search → BGE rerank):
 
 ```bash
-# Basic query
+# Default: hybrid top-20 → rerank → top-5
 cortex-query "How do I contribute to the handbook?"
+
+# Raw hybrid search only (no rerank)
+cortex-query "How do I contribute to the handbook?" --no-rerank
 
 # More results + parent section context
 cortex-query "GitLab CREDIT values" -n 5 --show-parent
@@ -79,12 +82,47 @@ cortex-query "remote work policy" --json -q
 Python API:
 
 ```python
-from cortex.retrieval import KBRetriever, format_retrieval_results
+from cortex.retrieval import RetrievalPipeline, format_retrieval_results
 from cortex.models.enums import SourceType
 
-retriever = KBRetriever()
-hits = retriever.search("GitLab values", source_type=SourceType.HANDBOOK_MARKDOWN, limit=5)
-context = format_retrieval_results(hits)  # ready for LLM prompt
+pipeline = RetrievalPipeline()
+hits = pipeline.search(
+    "GitLab values",
+    source_type=SourceType.HANDBOOK_MARKDOWN,
+    limit=5,
+    use_rerank=True,
+)
+context = format_retrieval_results(hits)  # ready for LLM prompt (Stage 2b)
+```
+
+Future LangGraph topology: `retrieve → rerank → grade → synthesize` (grader plugs in after rerank).
+
+## Ask questions (retrieve + rerank + synthesize)
+
+```bash
+# Cited natural-language answer (default: rerank on, llama3.2)
+uv run cortex-ask "How do I contribute to the GitLab handbook?"
+
+# Quiet mode
+uv run cortex-ask "What are GitLab CREDIT values?" -q
+
+# JSON output
+uv run cortex-ask "remote work policy" --json -q
+
+# Skip reranker (faster, lower quality retrieval)
+uv run cortex-ask "How do I contribute?" --no-rerank -q
+```
+
+Python API:
+
+```python
+from cortex.synthesis import KBSynthesizer
+
+synthesizer = KBSynthesizer()
+result = synthesizer.ask("What are GitLab CREDIT values?")
+print(result.answer)
+for src in result.sources:
+    print(src.relative_path)
 ```
 
 ## Async ingestion (Celery)

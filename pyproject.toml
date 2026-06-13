@@ -16,11 +16,13 @@ dependencies = [
     "psycopg[binary]>=3.2",
     "tiktoken>=0.7",
     "fastembed>=0.4",
+    "sentence-transformers>=3.0",
 ]
 
 [project.scripts]
 cortex-ingest = "cortex.cli.ingest:main"
 cortex-query = "cortex.cli.query:main"
+cortex-ask = "cortex.cli.ask:main"
 
 [project.optional-dependencies]
 dev = [

@@ -17,7 +17,7 @@ from cortex.storage.qdrant import QdrantVectorStore
 class RetrievedChunk:
     chunk_id: str
     doc_id: str
-    score: float
+    score: float  # hybrid retrieval score from Qdrant (RRF)
     content: str
     parent_content: str
     heading_path: str
@@ -25,6 +25,7 @@ class RetrievedChunk:
     relative_path: str
     source_type: str
     metadata: dict[str, Any]
+    rerank_score: float | None = None  # cross-encoder score; set after reranking
 
 
 class KBRetriever:
