@@ -18,7 +18,7 @@ cortex/
 │   │   └── postgres.py  # Job logs + document hash registry
 │   ├── retrieval/       # Hybrid search with source_type filters
 │   ├── worker/          # Celery async ingestion
-│   └── cli/             # `cortex-ingest` CLI
+│   └── cli/             # `cortex-ingest` + `cortex-query` CLIs
 ├── db/migrations/       # SQL schema reference
 ├── tests/
 ├── docker-compose.yml
@@ -56,6 +56,35 @@ cortex-ingest handbook --force       # full re-embed
 
 # Single file
 cortex-ingest file data/handbook-main/handbook-main/content/handbook/about/contributing.md
+```
+
+## Query the knowledge base
+
+After ingestion, run hybrid search against Qdrant:
+
+```bash
+# Basic query
+cortex-query "How do I contribute to the handbook?"
+
+# More results + parent section context
+cortex-query "GitLab CREDIT values" -n 5 --show-parent
+
+# Filter to a department folder
+cortex-query "deployment kubernetes" --department engineering
+
+# JSON output (for scripting)
+cortex-query "remote work policy" --json -q
+```
+
+Python API:
+
+```python
+from cortex.retrieval import KBRetriever, format_retrieval_results
+from cortex.models.enums import SourceType
+
+retriever = KBRetriever()
+hits = retriever.search("GitLab values", source_type=SourceType.HANDBOOK_MARKDOWN, limit=5)
+context = format_retrieval_results(hits)  # ready for LLM prompt
 ```
 
 ## Async ingestion (Celery)

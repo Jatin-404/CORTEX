@@ -20,6 +20,7 @@ dependencies = [
 
 [project.scripts]
 cortex-ingest = "cortex.cli.ingest:main"
+cortex-query = "cortex.cli.query:main"
 
 [project.optional-dependencies]
 dev = [
